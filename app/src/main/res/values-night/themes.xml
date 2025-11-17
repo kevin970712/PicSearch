@@ -1,0 +1,5 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.PicSearch" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/dark_theme_background</item>
+    </style>
+</resources>

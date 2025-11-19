@@ -21,9 +21,9 @@ When you share an image file, Google Lens needs a public URL to analyze it. PicS
 4.  The app then hands this link over to Google Lens for the reverse image search.
 
 
-## Screenshots
-<img src="https://github.com/user-attachments/assets/93fd3cf8-20dc-404b-b6f5-73dd02bad59d" width=30%/>
-
+ App Screenshot | Demo Video |
+| :---: | :---: |
+| <img src="https://github.com/user-attachments/assets/93fd3cf8-20dc-404b-b6f5-73dd02bad59d"/> | ![App Demo](https://github.com/user-attachments/assets/d5ffbc8c-8e77-49ad-a20c-5b992a15a24e) |
 
 
 ## Built With 🛠️

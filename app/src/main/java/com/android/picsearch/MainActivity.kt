@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.android.picsearch.ui.theme.PicSearchTheme
+import java.io.File
 
 class MainActivity : ComponentActivity() {
 
@@ -65,6 +66,39 @@ class MainActivity : ComponentActivity() {
                     MainScreen(uiState = uiState)
                 }
             }
+        }
+    }
+
+    /**
+     * Automatically clear cache when the activity is destroyed.
+     * This prevents the app from accumulating large amounts of WebView data over time.
+     */
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            // Clear WebView cache (includeDiskFiles = true)
+            WebView(this).clearCache(true)
+
+            // Clear application internal cache directory
+            deleteCache(cacheDir)
+
+            // Clear application external cache directory (if exists)
+            externalCacheDir?.let { deleteCache(it) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun deleteCache(dir: File) {
+        try {
+            if (dir.isDirectory) {
+                dir.listFiles()?.forEach { child ->
+                    deleteCache(child)
+                }
+            }
+            dir.delete()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }
@@ -186,7 +220,6 @@ fun WebViewScreen(url: String) {
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
-                    userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Mobile Safari/537.36"
                 }
 
                 loadUrl(url)

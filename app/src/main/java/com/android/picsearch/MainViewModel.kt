@@ -13,8 +13,6 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 sealed class UiState {
     data object Idle : UiState()
@@ -29,30 +27,17 @@ class MainViewModel : ViewModel() {
     val uiState = _uiState.asStateFlow()
 
     fun handleIntent(intent: Intent?, contentResolver: ContentResolver) {
-        if (intent?.action != Intent.ACTION_SEND) {
-            return
-        }
+        if (intent?.action != Intent.ACTION_SEND) return
 
-        when {
-            intent.type == "text/plain" -> {
-                val imageUrl = intent.getStringExtra(Intent.EXTRA_TEXT)
-                if (!imageUrl.isNullOrBlank()) {
-                    val encodedUrl = URLEncoder.encode(imageUrl, StandardCharsets.UTF_8.toString())
-                    _uiState.value = UiState.Success("https://lens.google.com/uploadbyurl?url=$encodedUrl")
-                } else {
-                    _uiState.value = UiState.Error("分享的網址為空")
-                }
+        if (intent.type?.startsWith("image/") == true) {
+            val uri = intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
+            if (uri != null) {
+                uploadImage(uri, contentResolver)
+            } else {
+                _uiState.value = UiState.Error("Failed to get image URI")
             }
-            intent.type?.startsWith("image/") == true -> {
-                (intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri)?.let { imageUri ->
-                    uploadImage(imageUri, contentResolver)
-                } ?: run {
-                    _uiState.value = UiState.Error("無法獲取分享的圖片")
-                }
-            }
-            else -> {
-                _uiState.value = UiState.Error("不支援的分享類型")
-            }
+        } else {
+            _uiState.value = UiState.Error("Unsupported content type")
         }
     }
 
@@ -79,15 +64,16 @@ class MainViewModel : ViewModel() {
                         val directUrl = pageUrl.replace("tmpfiles.org/", "tmpfiles.org/dl/")
                         val secureDirectUrl = directUrl.replaceFirst("http://", "https://")
                         val finalUrl = "https://lens.google.com/uploadbyurl?url=$secureDirectUrl"
+
                         _uiState.value = UiState.Success(finalUrl)
                     } else {
-                        _uiState.value = UiState.Error("圖片上傳失敗")
+                        _uiState.value = UiState.Error("Upload failed")
                     }
                 } ?: run {
-                    _uiState.value = UiState.Error("無法讀取圖片檔案")
+                    _uiState.value = UiState.Error("Cannot read file")
                 }
             } catch (e: Exception) {
-                _uiState.value = UiState.Error("發生錯誤: ${e.message}")
+                _uiState.value = UiState.Error("Error: ${e.message}")
             }
         }
     }

@@ -1,14 +1,15 @@
 package com.android.picsearch
 
+import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.Bundle
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,30 +28,40 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.android.picsearch.ui.theme.PicSearchTheme
-import java.io.File
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Enable Edge-to-Edge display
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        if (savedInstanceState == null && intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val textUrl = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (!textUrl.isNullOrBlank()) {
+                val encodedUrl = URLEncoder.encode(textUrl, StandardCharsets.UTF_8.toString())
+                val finalUrl = "https://lens.google.com/uploadbyurl?url=$encodedUrl"
+
+                launchCustomTab(this, finalUrl)
+                finish()
+                overridePendingTransition(0, 0)
+                return
+            }
+        }
 
         if (savedInstanceState == null) {
             viewModel.handleIntent(intent, contentResolver)
@@ -63,50 +74,27 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val uiState by viewModel.uiState.collectAsState()
-                    MainScreen(uiState = uiState)
+                    MainScreen(
+                        uiState = uiState,
+                        onFinishApp = {
+                            finish()
+                            overridePendingTransition(0, 0)
+                        }
+                    )
                 }
             }
-        }
-    }
-
-    /**
-     * Automatically clear cache when the activity is destroyed.
-     * This prevents the app from accumulating large amounts of WebView data over time.
-     */
-    override fun onDestroy() {
-        super.onDestroy()
-        try {
-            // Clear WebView cache (includeDiskFiles = true)
-            WebView(this).clearCache(true)
-
-            // Clear application internal cache directory
-            deleteCache(cacheDir)
-
-            // Clear application external cache directory (if exists)
-            externalCacheDir?.let { deleteCache(it) }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun deleteCache(dir: File) {
-        try {
-            if (dir.isDirectory) {
-                dir.listFiles()?.forEach { child ->
-                    deleteCache(child)
-                }
-            }
-            dir.delete()
-        } catch (e: Exception) {
-            e.printStackTrace()
         }
     }
 }
 
 @Composable
-fun MainScreen(uiState: UiState) {
+fun MainScreen(
+    uiState: UiState,
+    onFinishApp: () -> Unit
+) {
+    val context = LocalContext.current
+
     Box(
-        // Apply padding for system bars to ensure content is not obscured.
         modifier = Modifier
             .fillMaxSize()
             .padding(WindowInsets.safeDrawing.asPaddingValues()),
@@ -114,16 +102,48 @@ fun MainScreen(uiState: UiState) {
     ) {
         when (uiState) {
             is UiState.Idle -> IdleScreen()
-            is UiState.Loading -> CircularProgressIndicator()
-            is UiState.Success -> WebViewScreen(url = uiState.url)
             is UiState.Error -> Text(text = "Error: ${uiState.message}")
+            is UiState.Loading, is UiState.Success -> {
+                CircularProgressIndicator()
+
+                if (uiState is UiState.Success) {
+                    LaunchedEffect(uiState.url) {
+                        launchCustomTab(context, uiState.url)
+                        onFinishApp()
+                    }
+                }
+            }
         }
+    }
+}
+
+fun launchCustomTab(context: Context, url: String) {
+    try {
+        CustomTabsIntent.Builder().build().launchUrl(context, Uri.parse(url))
+    } catch (e: Exception) {
+        e.printStackTrace()
     }
 }
 
 @Composable
 fun IdleScreen() {
     val configuration = LocalConfiguration.current
+
+    // 共用內容區塊
+    val imageBlock = @Composable { modifier: Modifier ->
+        InstructionBlock(
+            modifier = modifier,
+            drawableId = R.drawable.ic_share_image,
+            text = "Find an image in another app,\n tap \"Share\" and select PicSearch."
+        )
+    }
+    val linkBlock = @Composable { modifier: Modifier ->
+        InstructionBlock(
+            modifier = modifier,
+            drawableId = R.drawable.ic_share_link,
+            text = "Or, share an image URL\n to PicSearch."
+        )
+    }
 
     Column(
         modifier = Modifier.fillMaxSize(),
@@ -136,40 +156,31 @@ fun IdleScreen() {
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        when (configuration.orientation) {
-            Configuration.ORIENTATION_LANDSCAPE -> {
-                // Use a Row for landscape orientation.
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    InstructionBlock(
-                        modifier = Modifier.weight(1f),
-                        drawableId = R.drawable.ic_share_image,
-                        text = "Find an image in another app,\n tap \"Share\" and select PicSearch."
-                    )
-                    InstructionBlock(
-                        modifier = Modifier.weight(1f),
-                        drawableId = R.drawable.ic_share_link,
-                        text = "Or, share an image URL\n to PicSearch."
-                    )
-                }
+        if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                imageBlock(Modifier.weight(1f))
+                linkBlock(Modifier.weight(1f))
             }
-            else -> {
-                // Use a Column for portrait orientation.
-                InstructionBlock(
-                    drawableId = R.drawable.ic_share_image,
-                    text = "Find an image in another app,\n tap \"Share\" and select PicSearch."
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                InstructionBlock(
-                    drawableId = R.drawable.ic_share_link,
-                    text = "Or, share an image URL\n to PicSearch."
-                )
-            }
+        } else {
+            imageBlock(Modifier)
+            Spacer(modifier = Modifier.height(24.dp))
+            linkBlock(Modifier)
         }
     }
+}
+
+@Composable
+private fun InstructionContent() {
+
+    InstructionBlock(
+        drawableId = R.drawable.ic_share_image,
+        text = "Find an image in another app,\n tap \"Share\" and select PicSearch."
+    )
+
 }
 
 @Composable
@@ -179,12 +190,12 @@ private fun InstructionBlock(
     text: String
 ) {
     Column(
-        modifier = modifier,
+        modifier = modifier, // 允許外部傳入 weight
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Image(
             painter = painterResource(id = drawableId),
-            contentDescription = null, // Decorative image
+            contentDescription = null,
             modifier = Modifier.size(240.dp)
         )
         Spacer(modifier = Modifier.height(8.dp))
@@ -193,46 +204,5 @@ private fun InstructionBlock(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyLarge
         )
-    }
-}
-
-
-@Composable
-fun WebViewScreen(url: String) {
-    val backgroundColor = MaterialTheme.colorScheme.background
-    var webView: WebView? by remember { mutableStateOf(null) }
-    var canGoBack: Boolean by remember { mutableStateOf(false) }
-
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = { context ->
-            WebView(context).apply {
-                // Set background color to prevent white flicker before page loads.
-                setBackgroundColor(backgroundColor.toArgb())
-
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String?) {
-                        super.onPageFinished(view, url)
-                        canGoBack = view.canGoBack()
-                    }
-                }
-
-                settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                }
-
-                loadUrl(url)
-                webView = this
-            }
-        },
-        update = {
-            it.loadUrl(url)
-        }
-    )
-
-    // Handle back button press to navigate back in WebView history.
-    BackHandler(enabled = canGoBack) {
-        webView?.goBack()
     }
 }

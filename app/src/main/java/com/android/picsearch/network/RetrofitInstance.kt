@@ -6,16 +6,13 @@ import okhttp3.MediaType.Companion.toMediaType
 import retrofit2.Retrofit
 
 object RetrofitInstance {
-    private val json = Json { ignoreUnknownKeys = true }
-
-    private val retrofit by lazy {
+    val api: TmpFilesApiService by lazy {
         Retrofit.Builder()
             .baseUrl("https://tmpfiles.org/")
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .addConverterFactory(Json {
+                ignoreUnknownKeys = true
+            }.asConverterFactory("application/json".toMediaType()))
             .build()
-    }
-
-    val api: TmpFilesApiService by lazy {
-        retrofit.create(TmpFilesApiService::class.java)
+            .create(TmpFilesApiService::class.java)
     }
 }

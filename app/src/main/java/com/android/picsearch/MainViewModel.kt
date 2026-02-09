@@ -13,7 +13,6 @@ import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.net.URLEncoder
 
 sealed class UiState {
     data object Idle : UiState()
@@ -29,24 +28,7 @@ class MainViewModel : ViewModel() {
 
     fun handleIntent(intent: Intent?, contentResolver: ContentResolver) {
         if (intent?.action != Intent.ACTION_SEND) return
-
         when {
-            // 處理純文字/網址分享
-            intent.type == "text/plain" -> {
-                val textUrl = intent.getStringExtra(Intent.EXTRA_TEXT)
-                if (!textUrl.isNullOrBlank()) {
-                    val finalUrl = "https://lens.google.com/uploadbyurl?url=${
-                        URLEncoder.encode(
-                            textUrl,
-                            "UTF-8"
-                        )
-                    }"
-                    _uiState.value = UiState.Success(finalUrl)
-                } else {
-                    _uiState.value = UiState.Error("Invalid text content")
-                }
-            }
-            // 處理圖片分享
             intent.type?.startsWith("image/") == true -> {
                 val uri = intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
                 if (uri != null) {
@@ -55,7 +37,6 @@ class MainViewModel : ViewModel() {
                     _uiState.value = UiState.Error("Failed to get image URI")
                 }
             }
-
             else -> {
                 _uiState.value = UiState.Error("Unsupported content type")
             }

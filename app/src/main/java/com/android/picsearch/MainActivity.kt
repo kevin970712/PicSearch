@@ -1,6 +1,7 @@
 package com.android.picsearch
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -26,6 +27,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.android.picsearch.ui.theme.PicSearchTheme
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class MainActivity : ComponentActivity() {
 
@@ -34,6 +37,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        if (savedInstanceState == null && intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val textUrl = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (!textUrl.isNullOrBlank()) {
+                val encodedUrl = URLEncoder.encode(textUrl, StandardCharsets.UTF_8.toString())
+                val finalUrl = "https://lens.google.com/uploadbyurl?url=$encodedUrl"
+
+                launchCustomTab(this, finalUrl)
+
+                finish()
+                overridePendingTransition(0, 0)
+                return
+            }
+        }
 
         if (savedInstanceState == null) {
             viewModel.handleIntent(intent, contentResolver)
